@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Bot Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1419; color: #e6e6e6; margin: 0; padding: 24px; }
+    h1 { margin-top: 0; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; background: #1f2d3d; font-size: 14px; }
+    .paper { background: #2a4a2a; }
+    .live { background: #6b1f1f; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+    .card { background: #1a222c; border-radius: 10px; padding: 16px; }
+    .label { font-size: 13px; color: #8a96a3; }
+    .value { font-size: 22px; font-weight: 600; margin-top: 6px; }
+    .pos { color: #4caf50; } .neg { color: #f44336; }
+    table { width: 100%; border-collapse: collapse; background: #1a222c; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #263240; }
+    th { color: #8a96a3; font-weight: 500; }
+    .buy { color: #4caf50; } .sell { color: #f44336; }
+    #updated { color: #8a96a3; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Trading Bot <span id="mode" class="badge">...</span></h1>
+  <div id="updated">Waiting for data...</div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Symbol</div><div class="value" id="symbol">-</div></div>
+    <div class="card"><div class="label">Last price</div><div class="value" id="price">-</div></div>
+    <div class="card"><div class="label">Equity</div><div class="value" id="equity">-</div></div>
+    <div class="card"><div class="label">Cash</div><div class="value" id="cash">-</div></div>
+    <div class="card"><div class="label">Position</div><div class="value" id="position">-</div></div>
+    <div class="card"><div class="label">Daily P&amp;L</div><div class="value" id="daily">-</div></div>
+  </div>
+
+  <h2>Recent trades</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Side</th><th>Price</th><th>Amount</th></tr></thead>
+    <tbody id="trades"><tr><td colspan="4">No trades yet</td></tr></tbody>
+  </table>
+
+<script>
+  const fmt = (n, d = 2) => (n === null || n === undefined) ? "-" : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+
+  async function refresh() {
+    try {
+      const res = await fetch("/api/state");
+      const s = await res.json();
+
+      const mode = document.getElementById("mode");
+      mode.textContent = s.mode || "UNKNOWN";
+      mode.className = "badge " + (s.mode === "LIVE" ? "live" : "paper");
+
+      document.getElementById("symbol").textContent = s.symbol || "-";
+      document.getElementById("price").textContent = fmt(s.last_price);
+      document.getElementById("equity").textContent = fmt(s.equity) + " USDT";
+      document.getElementById("cash").textContent = fmt(s.cash) + " USDT";
+      document.getElementById("position").textContent = fmt(s.position, 6);
+
+      const daily = document.getElementById("daily");
+      daily.textContent = (s.daily_pnl_pct === undefined) ? "-" : fmt(s.daily_pnl_pct * 100) + "%";
+      daily.className = "value " + ((s.daily_pnl_pct || 0) >= 0 ? "pos" : "neg");
+
+      const updated = s.updated_at ? new Date(s.updated_at * 1000).toLocaleTimeString() : "never";
+      document.getElementById("updated").textContent = "Last bot update: " + updated + " (" + (s.status || "unknown") + ")";
+
+      const tbody = document.getElementById("trades");
+      if (s.trades && s.trades.length) {
+        tbody.innerHTML = s.trades.slice().reverse().map(t =>
+          `<tr><td>${t.time}</td><td class="${String(t.side).toLowerCase()}">${t.side}</td><td>${fmt(t.price)}</td><td>${fmt(t.amount, 6)}</td></tr>`
+        ).join("");
+      }
+    } catch (err) {
+      document.getElementById("updated").textContent = "Cannot reach dashboard server";
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>
